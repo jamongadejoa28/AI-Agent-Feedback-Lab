@@ -1,0 +1,455 @@
+/* AI-Agent-Feedback-Lab 스타일시트 */
+:root {
+    --primary-color: #1a73e8;
+    --primary-hover: #1557b0;
+    --secondary-color: #5f6368;
+    --secondary-hover: #3c4043;
+    --success-color: #1e8e3e;
+    --success-hover: #137333;
+    --warning-bg: #fef7e0;
+    --warning-border: #f9ab00;
+    --warning-text: #b06000;
+    --error-bg: #fce8e6;
+    --error-border: #ea4335;
+    --error-text: #c5221f;
+    --bg-color: #f8f9fa;
+    --card-bg: #ffffff;
+    --text-primary: #202124;
+    --text-secondary: #5f6368;
+    --border-color: #dadce0;
+    --radius: 8px;
+    --shadow: 0 1px 3px rgba(60,64,67,0.1), 0 1px 2px rgba(60,64,67,0.06);
+}
+
+* {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+}
+
+body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    background-color: var(--bg-color);
+    color: var(--text-primary);
+    line-height: 1.6;
+    padding-bottom: 40px;
+}
+
+.app-header {
+    background-color: var(--card-bg);
+    border-bottom: 1px solid var(--border-color);
+    padding: 20px 0;
+    margin-bottom: 24px;
+}
+
+.header-container {
+    max-width: 960px;
+    margin: 0 auto;
+    padding: 0 20px;
+}
+
+.app-header h1 {
+    font-size: 1.5rem;
+    color: var(--primary-color);
+    margin-bottom: 4px;
+}
+
+.subtitle {
+    color: var(--text-secondary);
+    font-size: 0.9rem;
+}
+
+.container {
+    max-width: 960px;
+    margin: 0 auto;
+    padding: 0 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+}
+
+.card {
+    background: var(--card-bg);
+    border-radius: var(--radius);
+    border: 1px solid var(--border-color);
+    padding: 20px;
+    box-shadow: var(--shadow);
+}
+
+.card h2 {
+    font-size: 1.15rem;
+    margin-bottom: 14px;
+    color: var(--text-primary);
+}
+
+/* 안내 배너 */
+.alert-banner {
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+    padding: 14px 18px;
+    border-radius: var(--radius);
+    border-left: 4px solid;
+}
+
+.warning-banner {
+    background-color: var(--warning-bg);
+    border-left-color: var(--warning-border);
+    color: var(--warning-text);
+}
+
+.banner-icon {
+    font-size: 1.3rem;
+}
+
+.banner-content strong {
+    display: block;
+    margin-bottom: 2px;
+}
+
+.banner-content p {
+    font-size: 0.9rem;
+    line-height: 1.4;
+}
+
+/* 가이드라인 그리드 */
+.guide-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 20px;
+}
+
+@media (max-width: 768px) {
+    .guide-grid {
+        grid-template-columns: 1fr;
+    }
+}
+
+.guide-list {
+    padding-left: 20px;
+    font-size: 0.9rem;
+    color: var(--text-secondary);
+}
+
+.guide-list li {
+    margin-bottom: 8px;
+}
+
+.example-box {
+    margin-top: 12px;
+    background: #f1f3f4;
+    padding: 10px 14px;
+    border-radius: 6px;
+    font-size: 0.85rem;
+}
+
+.example-label {
+    display: block;
+    font-weight: bold;
+    color: var(--primary-color);
+    margin-bottom: 4px;
+}
+
+.rule-items {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.rule-item {
+    font-size: 0.85rem;
+    border-left: 3px solid var(--primary-color);
+    padding-left: 10px;
+}
+
+.rule-item strong {
+    display: block;
+    color: var(--text-primary);
+    margin-bottom: 2px;
+}
+
+.rule-item p {
+    color: var(--text-secondary);
+}
+
+/* 아코디언 */
+.accordion-card details summary {
+    cursor: pointer;
+    font-size: 0.95rem;
+    padding: 4px 0;
+    user-select: none;
+}
+
+.accordion-body {
+    margin-top: 16px;
+    padding-top: 14px;
+    border-top: 1px dashed var(--border-color);
+}
+
+.pipeline-flow {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 12px;
+}
+
+.flow-step {
+    background: #e8f0fe;
+    color: var(--primary-color);
+    padding: 4px 10px;
+    border-radius: 16px;
+    font-size: 0.85rem;
+    font-weight: 500;
+}
+
+.flow-arrow {
+    color: var(--text-secondary);
+}
+
+.pipeline-desc {
+    font-size: 0.88rem;
+    color: var(--text-secondary);
+    line-height: 1.5;
+    margin-bottom: 12px;
+}
+
+.policy-links-box {
+    background: #f8f9fa;
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+    padding: 10px 14px;
+    font-size: 0.85rem;
+}
+
+.policy-links-box a {
+    color: var(--primary-color);
+    text-decoration: none;
+}
+
+.policy-links-box a:hover {
+    text-decoration: underline;
+}
+
+/* 워크스페이스 입력 폼 */
+.test-workspace {
+    position: relative;
+}
+
+.form-group {
+    margin-bottom: 16px;
+}
+
+.form-group label {
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 6px;
+    font-size: 0.95rem;
+}
+
+.char-limit-guide, .char-counter {
+    font-size: 0.85rem;
+    color: var(--text-secondary);
+}
+
+textarea {
+    width: 100%;
+    padding: 12px;
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+    font-family: inherit;
+    font-size: 0.95rem;
+    resize: vertical;
+    transition: border-color 0.2s;
+}
+
+textarea:focus {
+    outline: none;
+    border-color: var(--primary-color);
+    box-shadow: 0 0 0 2px rgba(26, 115, 232, 0.2);
+}
+
+textarea:disabled {
+    background-color: #f1f3f4;
+    cursor: not-allowed;
+}
+
+.form-actions {
+    display: flex;
+    gap: 10px;
+}
+
+.btn {
+    padding: 10px 20px;
+    border-radius: 6px;
+    font-size: 0.95rem;
+    font-weight: 500;
+    cursor: pointer;
+    border: none;
+    transition: background-color 0.2s, opacity 0.2s;
+}
+
+.btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.btn-primary {
+    background-color: var(--primary-color);
+    color: white;
+}
+
+.btn-primary:hover:not(:disabled) {
+    background-color: var(--primary-hover);
+}
+
+.btn-secondary {
+    background-color: #f1f3f4;
+    color: var(--text-primary);
+    border: 1px solid var(--border-color);
+}
+
+.btn-secondary:hover:not(:disabled) {
+    background-color: #e8eaed;
+}
+
+.btn-success {
+    background-color: var(--success-color);
+    color: white;
+}
+
+.btn-success:hover:not(:disabled) {
+    background-color: var(--success-hover);
+}
+
+.btn-sm {
+    padding: 6px 14px;
+    font-size: 0.85rem;
+    margin-top: 8px;
+}
+
+/* 로딩 스피너 */
+.loading-container {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 12px;
+    padding: 30px 0;
+}
+
+.spinner {
+    width: 36px;
+    height: 36px;
+    border: 4px solid rgba(26, 115, 232, 0.2);
+    border-top-color: var(--primary-color);
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+    to { transform: rotate(360deg); }
+}
+
+/* 알림 박스 */
+.alert-box {
+    padding: 12px 16px;
+    border-radius: 6px;
+    margin-top: 16px;
+    font-size: 0.9rem;
+}
+
+.error-box {
+    background-color: var(--error-bg);
+    border: 1px solid var(--error-border);
+    color: var(--error-text);
+}
+
+/* 응답 및 피드백 영역 */
+.response-section {
+    margin-top: 24px;
+    padding-top: 20px;
+    border-top: 1px solid var(--border-color);
+}
+
+.section-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 12px;
+}
+
+.section-header h3 {
+    font-size: 1.05rem;
+    color: var(--text-primary);
+}
+
+.badge {
+    background: #e8f0fe;
+    color: var(--primary-color);
+    padding: 4px 10px;
+    border-radius: 12px;
+    font-size: 0.8rem;
+    font-weight: 500;
+}
+
+.answer-box {
+    background: #fafafa;
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+    padding: 16px;
+    white-space: pre-wrap;
+    word-break: break-word;
+    font-size: 0.95rem;
+    line-height: 1.65;
+}
+
+.answer-box a {
+    color: var(--primary-color);
+    text-decoration: underline;
+    word-break: break-all;
+}
+
+.divider {
+    border: 0;
+    border-top: 1px dashed var(--border-color);
+    margin: 20px 0;
+}
+
+.feedback-desc {
+    font-size: 0.88rem;
+    color: var(--text-secondary);
+    margin-bottom: 8px;
+}
+
+.success-card {
+    display: flex;
+    align-items: flex-start;
+    gap: 14px;
+    background: #e6f4ea;
+    border: 1px solid #ceead6;
+    color: #137333;
+    padding: 16px;
+    border-radius: 6px;
+    margin-top: 16px;
+}
+
+.success-icon {
+    font-size: 1.4rem;
+    font-weight: bold;
+}
+
+.success-card p {
+    font-size: 0.88rem;
+    margin: 4px 0 8px 0;
+}
+
+.hidden {
+    display: none !important;
+}
+
+.app-footer {
+    text-align: center;
+    padding: 24px 0;
+    color: var(--text-secondary);
+    font-size: 0.85rem;
+}
