@@ -9,8 +9,15 @@
 <body>
     <header class="app-header">
         <div class="header-container">
-            <h1>First-AI-Agent Feedback Lab</h1>
-            <p class="subtitle">사내 AI 에이전트 품질 평가 및 피드백 수집 시스템 (Phase 1~3 MVP)</p>
+            <div class="header-titles">
+                <h1>피드백 부탁드립니다🙏</h1>
+                <p class="subtitle">사내 AI 에이전트 품질 평가 및 피드백 수집 시스템 (Phase 1~3 MVP)</p>
+            </div>
+            <a href="/history" class="header-nav-btn" id="btn-view-history" title="피드백 모아보기">
+                <span class="btn-emoji">📋</span>
+                <span class="btn-text">피드백 모아보기</span>
+                <span id="feedback-count-badge" class="count-badge">0</span>
+            </a>
         </div>
     </header>
 
@@ -77,7 +84,7 @@
                         <div class="flow-step">5. 신뢰할 수 있는 답변 정리</div>
                     </div>
                     <p class="pipeline-desc">
-                        First-AI-Agent는 회사 공식 매뉴얼, 트러블슈팅 기준, 부서 안내 정책을 최우선으로 검토합니다.
+                        챗봇은 회사 공식 매뉴얼, 트러블슈팅 기준, 부서 안내 정책을 최우선으로 검토합니다.
                         본 테스트의 목적은 AI가 질문을 잘못 이해했거나, 잘못된 매뉴얼을 인용하거나, 불필요하게 말을 지어내는 경우를 찾아내어 교정하는 것입니다.
                     </p>
                     <div id="policy-info-box" class="policy-links-box">
@@ -102,7 +109,7 @@
                         name="question" 
                         rows="4" 
                         maxlength="4000" 
-                        placeholder="AI에게 테스트할 질문을 입력하세요 (예: MHC 컨트롤러에서 알람 E-02가 발생했을 때 조치 방법은?)"
+                        placeholder="AI에게 테스트할 질문을 입력하세요 (예: 구매문의)"
                         required
                     ></textarea>
                 </div>
@@ -130,7 +137,7 @@
             <!-- Agent 응답 표시 영역 -->
             <div id="agent-response-container" class="response-section hidden">
                 <div class="section-header">
-                    <h3>🤖 First-AI-Agent 실제 응답</h3>
+                    <h3>🤖 챗봇 실제 응답</h3>
                     <span id="latency-badge" class="badge">응답시간: - ms</span>
                 </div>
                 <!-- R15. DOM 기반 안전 렌더링 영역 (innerHTML 직접 대입 금지) -->
@@ -173,7 +180,7 @@
     </main>
 
     <footer class="app-footer">
-        <p>© 2026 First-AI-Agent Evaluation Team. Internal Use Only.</p>
+        <p>© 2026 🐈‍⬛</p>
     </footer>
 
     <script src="/static/app.js"></script>

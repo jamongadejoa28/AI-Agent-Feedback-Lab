@@ -305,6 +305,32 @@ class Database:
             cursor = conn.execute(query, tuple(params))
             return [TestRecord.from_row(row) for row in cursor.fetchall()]
 
+    def get_completed_count(self) -> int:
+        """등록 완료된(completed) 피드백 레코드의 총 개수를 반환합니다.
+
+        헤더 배지 알림 카운트 및 익스포트 전 데이터 수량 확인에 사용됩니다.
+        """
+        with self.get_connection() as conn:
+            cursor = conn.execute("SELECT COUNT(*) FROM tests WHERE status = 'completed';")
+            row = cursor.fetchone()
+            return int(row[0]) if row else 0
+
+    def get_feedbacks_list(
+        self,
+        limit: int = 100,
+        offset: int = 0,
+    ) -> list[TestRecord]:
+        """피드백 모아보기 화면 조회를 위해 완료된 레코드를 최신 등록순(created_at DESC)으로 조회합니다."""
+        query = """
+            SELECT * FROM tests 
+            WHERE status = 'completed'
+            ORDER BY created_at DESC, id DESC
+            LIMIT ? OFFSET ?;
+        """
+        with self.get_connection() as conn:
+            cursor = conn.execute(query, (limit, offset))
+            return [TestRecord.from_row(row) for row in cursor.fetchall()]
+
 
 # 싱글톤 데이터베이스 인스턴스
 db = Database()

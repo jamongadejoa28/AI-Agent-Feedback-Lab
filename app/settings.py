@@ -15,7 +15,7 @@ class Settings(BaseSettings):
     """
 
     # First-AI-Agent HTTP 엔드포인트 URL
-    agent_base_url: str = "http://127.0.0.1:8000"
+    agent_base_url: str = "http://0.0.0.0:8000"
 
     # SQLite 데이터베이스 파일 경로
     database_path: str = "data/feedback.db"
@@ -30,9 +30,8 @@ class Settings(BaseSettings):
     agent_timeout_seconds: float = 30.0
 
     # 서버 바인딩 호스트 및 포트
-    host: str = "127.0.0.1"
-    port: int = 8080
-
+    host: str = "0.0.0.0"
+    port: int = 8001
     model_config = SettingsConfigDict(
         env_file=".env",
         env_file_encoding="utf-8",

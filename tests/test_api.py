@@ -256,3 +256,56 @@ def test_idempotency_api_behavior(
     )
     assert res3.status_code == 409
     assert "서로 다른 질문" in res3.json()["detail"]
+
+
+def test_history_page_endpoint(test_client: TestClient) -> None:
+    """GET /history가 history.html 화면을 정상 반환하는지 검증합니다."""
+    response = test_client.get("/history")
+    assert response.status_code == 200
+    assert "피드백 모아보기" in response.text
+
+
+@patch("app.main.agent_client.query", new_callable=AsyncMock)
+def test_feedback_stats_and_list_endpoints(
+    mock_query: AsyncMock,
+    test_client: TestClient,
+) -> None:
+    """GET /api/feedbacks/stats 및 GET /api/feedbacks 엔드포인트 동작을 검증합니다."""
+    mock_query.return_value = ("챗봇 답변", 500)
+
+    # 1. 초기 상태 카운트는 0건이어야 함
+    stats_res = test_client.get("/api/feedbacks/stats")
+    assert stats_res.status_code == 200
+    assert stats_res.json()["total_count"] == 0
+
+    list_res = test_client.get("/api/feedbacks")
+    assert list_res.status_code == 200
+    assert list_res.json()["total_count"] == 0
+    assert len(list_res.json()["items"]) == 0
+
+    # 2. 피드백 1건 완료 생성
+    test_res = test_client.post(
+        "/api/test",
+        json={"question": "구매문의 방법은?", "client_request_id": str(uuid.uuid4())},
+    )
+    test_id = test_res.json()["test_id"]
+
+    test_client.post(
+        f"/api/test/{test_id}/feedback",
+        json={"expected_response": "마케팅부서(070-8666-4272) 안내 필요"},
+    )
+
+    # 3. 카운트 1건으로 갱신 확인
+    stats_res2 = test_client.get("/api/feedbacks/stats")
+    assert stats_res2.status_code == 200
+    assert stats_res2.json()["total_count"] == 1
+
+    # 4. 목록 조회 확인
+    list_res2 = test_client.get("/api/feedbacks")
+    assert list_res2.status_code == 200
+    assert list_res2.json()["total_count"] == 1
+    items = list_res2.json()["items"]
+    assert len(items) == 1
+    assert items[0]["question"] == "구매문의 방법은?"
+    assert items[0]["agent_response"] == "챗봇 답변"
+    assert items[0]["expected_response"] == "마케팅부서(070-8666-4272) 안내 필요"

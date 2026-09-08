@@ -34,7 +34,10 @@ from app.database import (
 from app.policy_reader import policy_reader
 from app.schemas import (
     FeedbackCreateRequest,
+    FeedbackItemResponse,
+    FeedbackListResponse,
     FeedbackResponse,
+    FeedbackStatsResponse,
     HealthResponse,
     PolicyInfoResponse,
     TestCreateRequest,
@@ -124,6 +127,48 @@ async def index() -> FileResponse:
             detail="index.html 파일을 찾을 수 없습니다.",
         )
     return FileResponse(index_file)
+
+
+@app.get("/history", summary="피드백 모아보기 화면")
+async def history_page() -> FileResponse:
+    """피드백 모아보기 웹 인터페이스(history.html)를 반환합니다."""
+    history_file = static_path / "history.html"
+    if not history_file.is_file():
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="history.html 파일을 찾을 수 없습니다.",
+        )
+    return FileResponse(history_file)
+
+
+@app.get("/api/feedbacks/stats", response_model=FeedbackStatsResponse, summary="피드백 총 건수 통계 조회")
+async def get_feedback_stats() -> FeedbackStatsResponse:
+    """헤더 배지 알림 카운트 및 데이터 현황 확인을 위해 완료된 피드백 총 건수를 반환합니다."""
+    count = db.get_completed_count()
+    return FeedbackStatsResponse(total_count=count)
+
+
+@app.get("/api/feedbacks", response_model=FeedbackListResponse, summary="완료된 피드백 목록 조회")
+async def get_feedbacks(
+    limit: int = 100,
+    offset: int = 0,
+) -> FeedbackListResponse:
+    """테스터들의 다양한 테스트 유도 및 사전 확인을 위해 완료된 피드백 목록을 반환합니다."""
+    total = db.get_completed_count()
+    records = db.get_feedbacks_list(limit=limit, offset=offset)
+    items = [
+        FeedbackItemResponse(
+            id=r.id,
+            test_date=r.test_date,
+            created_at=r.created_at,
+            question=r.question,
+            agent_response=r.agent_response,
+            expected_response=r.expected_response,
+            latency_ms=r.latency_ms,
+        )
+        for r in records
+    ]
+    return FeedbackListResponse(total_count=total, items=items)
 
 
 @app.get("/api/health", response_model=HealthResponse, summary="서비스 헬스체크")

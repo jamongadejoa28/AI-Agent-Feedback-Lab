@@ -46,6 +46,15 @@ body {
     max-width: 960px;
     margin: 0 auto;
     padding: 0 20px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 16px;
+}
+
+.header-titles {
+    display: flex;
+    flex-direction: column;
 }
 
 .app-header h1 {
@@ -57,6 +66,47 @@ body {
 .subtitle {
     color: var(--text-secondary);
     font-size: 0.9rem;
+}
+
+.header-nav-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    background: #ffffff;
+    color: var(--text-primary);
+    border: 1px solid var(--border-color);
+    padding: 8px 16px;
+    border-radius: 20px;
+    text-decoration: none;
+    font-size: 0.9rem;
+    font-weight: 500;
+    box-shadow: 0 1px 2px rgba(0,0,0,0.05);
+    transition: all 0.2s ease;
+    white-space: nowrap;
+}
+
+.header-nav-btn:hover {
+    background: #f1f3f4;
+    border-color: #bdc1c6;
+    transform: translateY(-1px);
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
+.btn-emoji {
+    font-size: 1.1rem;
+    line-height: 1;
+}
+
+.count-badge {
+    background: var(--primary-color);
+    color: #ffffff;
+    font-size: 0.75rem;
+    font-weight: bold;
+    padding: 2px 8px;
+    border-radius: 10px;
+    min-width: 20px;
+    text-align: center;
+    line-height: 1.3;
 }
 
 .container {
@@ -452,4 +502,151 @@ textarea:disabled {
     padding: 24px 0;
     color: var(--text-secondary);
     font-size: 0.85rem;
+}
+
+/* 피드백 모아보기(History) 전용 스타일 */
+.history-toolbar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 12px;
+    padding: 14px 20px;
+}
+
+.toolbar-left {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.toolbar-stat-label {
+    font-size: 0.95rem;
+    font-weight: 500;
+    color: var(--text-secondary);
+}
+
+.toolbar-stat-badge {
+    background: #e8f0fe;
+    color: var(--primary-color);
+    font-weight: bold;
+    padding: 4px 10px;
+    border-radius: 12px;
+    font-size: 0.9rem;
+}
+
+.toolbar-right {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.search-box input {
+    padding: 6px 12px;
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+    font-size: 0.88rem;
+    width: 220px;
+    transition: border-color 0.2s;
+}
+
+.search-box input:focus {
+    outline: none;
+    border-color: var(--primary-color);
+    box-shadow: 0 0 0 2px rgba(26, 115, 232, 0.2);
+}
+
+.feedback-cards-wrapper {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+}
+
+.feedback-card {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    border-radius: var(--radius);
+    transition: box-shadow 0.2s, transform 0.2s;
+}
+
+.feedback-card:hover {
+    box-shadow: 0 4px 12px rgba(60, 64, 67, 0.12);
+}
+
+.feedback-card-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 0.85rem;
+    color: var(--text-secondary);
+    border-bottom: 1px solid #f1f3f4;
+    padding-bottom: 8px;
+}
+
+.feedback-time {
+    font-weight: 500;
+}
+
+.feedback-card-section {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.section-label {
+    font-size: 0.85rem;
+    font-weight: bold;
+    color: var(--text-secondary);
+}
+
+.section-body {
+    font-size: 0.92rem;
+    line-height: 1.55;
+    padding: 10px 14px;
+    border-radius: 6px;
+    word-break: break-word;
+    white-space: pre-wrap;
+}
+
+.question-body {
+    background: #f8f9fa;
+    border-left: 3px solid var(--primary-color);
+    color: var(--text-primary);
+    font-weight: 500;
+}
+
+.answer-body {
+    background: #fcfcfc;
+    border: 1px solid var(--border-color);
+    color: var(--text-primary);
+}
+
+.answer-body a {
+    color: var(--primary-color);
+    text-decoration: underline;
+    word-break: break-all;
+}
+
+.feedback-body {
+    background: #e6f4ea;
+    border-left: 3px solid var(--success-color);
+    color: #137333;
+    font-weight: 500;
+}
+
+.empty-state-card {
+    text-align: center;
+    padding: 48px 20px;
+    color: var(--text-secondary);
+}
+
+.empty-icon {
+    font-size: 2.8rem;
+    margin-bottom: 12px;
+}
+
+.empty-state-card h3 {
+    color: var(--text-primary);
+    margin-bottom: 6px;
 }

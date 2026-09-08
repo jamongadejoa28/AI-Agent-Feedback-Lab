@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>피드백 모아보기 - AI-Agent Feedback Lab</title>
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+    <header class="app-header">
+        <div class="header-container">
+            <div class="header-titles">
+                <h1>📋 피드백 모아보기</h1>
+                <p class="subtitle">등록된 질문과 AI 응답, 피드백을 확인하고 더 다양한 테스트를 진행해 보세요.</p>
+            </div>
+            <a href="/" class="header-nav-btn" title="테스트 화면으로 이동">
+                <span class="btn-emoji">🧪</span>
+                <span class="btn-text">테스트 화면으로</span>
+            </a>
+        </div>
+    </header>
+
+    <main class="container">
+        <!-- 상단 툴바 (총 건수 배지, 검색 필터, 새로고침) -->
+        <section class="card history-toolbar">
+            <div class="toolbar-left">
+                <span class="toolbar-stat-label">총 등록 피드백:</span>
+                <span id="history-total-count" class="toolbar-stat-badge">0건</span>
+            </div>
+            <div class="toolbar-right">
+                <div class="search-box">
+                    <input 
+                        type="text" 
+                        id="search-input" 
+                        placeholder="질문 또는 피드백 검색..." 
+                        aria-label="피드백 검색"
+                    >
+                </div>
+                <button type="button" id="btn-refresh-history" class="btn btn-secondary btn-sm" title="최신 데이터 불러오기">
+                    🔄 새로고침
+                </button>
+            </div>
+        </section>
+
+        <!-- 로딩 상태 표시 -->
+        <div id="history-loading" class="loading-container hidden">
+            <div class="spinner"></div>
+            <p>피드백 데이터를 불러오고 있습니다...</p>
+        </div>
+
+        <!-- 피드백 카드 목록 컨테이너 -->
+        <section id="feedback-list-container" class="feedback-cards-wrapper">
+            <!-- 동적으로 주입되는 피드백 카드들 -->
+        </section>
+
+        <!-- 빈 데이터 안내 카드 -->
+        <div id="empty-state-card" class="card empty-state-card hidden">
+            <div class="empty-icon">📭</div>
+            <h3>등록된 피드백 데이터가 없습니다</h3>
+            <p>첫 번째 테스트 질문을 보내고 개선 피드백을 등록해 보세요!</p>
+            <a href="/" class="btn btn-primary btn-sm" style="display: inline-block; margin-top: 12px; text-decoration: none;">
+                테스트하러 가기
+            </a>
+        </div>
+    </main>
+
+    <footer class="app-footer">
+        <p>© 2026 🐈‍⬛</p>
+    </footer>
+
+    <script src="/static/history.js"></script>
+</body>
+</html>

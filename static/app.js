@@ -32,6 +32,7 @@
     const btnSubmitFeedback = document.getElementById("btn-submit-feedback");
     const feedbackSuccessCard = document.getElementById("feedback-success-card");
     const policyInfoBox = document.getElementById("policy-info-box");
+    const feedbackCountBadge = document.getElementById("feedback-count-badge");
 
     /**
      * UUID4 식별자를 생성합니다. (crypto.randomUUID 지원 여부 확인)
@@ -268,6 +269,9 @@
             feedbackSection.classList.add("hidden");
             feedbackSuccessCard.classList.remove("hidden");
 
+            // 헤더 알림 배지 즉시 최신화
+            updateFeedbackCountBadge();
+
         } catch (err) {
             showError("피드백 전송 중 네트워크 오류가 발생했습니다.");
             btnSubmitFeedback.disabled = false;
@@ -360,7 +364,23 @@
         }
     });
 
+    /**
+     * 헤더에 표시되는 총 피드백 개수 배지를 최신화합니다.
+     */
+    async function updateFeedbackCountBadge() {
+        if (!feedbackCountBadge) return;
+        try {
+            const res = await fetch("/api/feedbacks/stats");
+            if (!res.ok) return;
+            const data = await res.json();
+            feedbackCountBadge.textContent = Number(data.total_count || 0).toLocaleString();
+        } catch {
+            // 네트워크 오류 시 조용히 유지
+        }
+    }
+
     // 초기화 실행
     loadPolicyInfo();
+    updateFeedbackCountBadge();
     questionInput.focus();
 })();

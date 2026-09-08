@@ -4,6 +4,7 @@
 길이 제한, 공백 제거, 필수 필드 존재 여부를 확인합니다.
 """
 
+from typing import Optional
 from pydantic import BaseModel, Field, field_validator
 
 
@@ -96,3 +97,28 @@ class PolicyInfoResponse(BaseModel):
     manual_url: str = Field(..., description="공식 제품 매뉴얼 다운로드 URL")
     repair_url: str = Field(..., description="공식 제품 수리 및 A/S 접수 URL")
     contacts: dict[str, str] = Field(..., description="주요 부서별 공식 문의 전화번호 매핑")
+
+
+class FeedbackItemResponse(BaseModel):
+    """피드백 열람용 개별 레코드 응답 모델."""
+
+    id: str = Field(..., description="테스트 레코드 ID")
+    test_date: str = Field(..., description="테스트 실행 일자 (Asia/Seoul)")
+    created_at: str = Field(..., description="테스트 생성 시각 (ISO 8601)")
+    question: str = Field(..., description="사용자 질문 내용")
+    agent_response: Optional[str] = Field(default=None, description="AI Agent 응답 내용")
+    expected_response: Optional[str] = Field(default=None, description="원했던 응답 및 피드백 내용")
+    latency_ms: Optional[int] = Field(default=None, description="소요 시간 (밀리초)")
+
+
+class FeedbackListResponse(BaseModel):
+    """피드백 모아보기 목록 응답 모델."""
+
+    total_count: int = Field(..., description="완료된 총 피드백 건수")
+    items: list[FeedbackItemResponse] = Field(default_factory=list, description="피드백 레코드 목록")
+
+
+class FeedbackStatsResponse(BaseModel):
+    """헤더 알림 배지용 피드백 수량 요약 모델."""
+
+    total_count: int = Field(..., description="완료된 총 피드백 건수")

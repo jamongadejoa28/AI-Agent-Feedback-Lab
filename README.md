@@ -137,12 +137,15 @@ AGENT_TIMEOUT_SECONDS=30.0
 | Method | Endpoint | 설명 |
 | :--- | :--- | :--- |
 | `GET` | `/` | 테스터용 싱글 턴 평가 웹 UI 제공 |
+| `GET` | `/history` | 등록된 피드백 데이터 모아보기 웹 UI 제공 |
 | `GET` | `/api/health` | 서비스 생존 여부, DB 및 정책 파일 상태 점검 |
 | `GET` | `/api/policy-info` | First-AI-Agent의 공식 다운로드/수리 접수 URL 및 문의처 제공 |
+| `GET` | `/api/feedbacks/stats` | 헤더 알림 배지용 완료 피드백 총 건수 조회 |
+| `GET` | `/api/feedbacks` | 테스터들의 다양한 테스트 유도를 위한 완료 피드백 목록 조회 |
 | `POST` | `/api/test` | 질문 접수, `processing` 선예약, Agent 호출 및 답변 반환 |
 | `POST` | `/api/test/{test_id}/feedback` | 평가 피드백(원했던 응답) 저장 및 `completed` 완료 처리 |
 
-> **보안 원칙**: 테스터 전용 화면에서는 타인의 피드백 목록을 열람할 수 있는 목록 조회 API(`GET /api/tests` 등)를 일체 제공하지 않으며, 타인의 `test_id`로 피드백을 요청할 경우 `404 Not Found`를 반환합니다.
+> **데이터 열람 및 격리 원칙**: 테스터들은 `/history`를 통해 등록된 완료 피드백(`status = 'completed'`)을 상호 열람하여 다양한 테스트 아이디어를 얻을 수 있으며, 타인의 진행 중인 테스트 수정이나 세션 탈취를 방지하기 위해 타인의 `test_id`로 피드백을 요청할 경우 `404 Not Found`를 반환합니다.
 
 ---
 
