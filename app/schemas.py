@@ -112,9 +112,12 @@ class FeedbackItemResponse(BaseModel):
 
 
 class FeedbackListResponse(BaseModel):
-    """피드백 모아보기 목록 응답 모델."""
+    """DB 전체 검색과 페이지 이동 정보를 포함하는 피드백 목록 응답 모델."""
 
-    total_count: int = Field(..., description="완료된 총 피드백 건수")
+    total_count: int = Field(..., description="현재 검색 조건에 맞는 완료 피드백 건수")
+    page: int = Field(..., description="현재 페이지 번호 (1부터 시작)")
+    page_size: int = Field(..., description="페이지당 피드백 건수")
+    total_pages: int = Field(..., description="현재 검색 조건의 전체 페이지 수")
     items: list[FeedbackItemResponse] = Field(default_factory=list, description="피드백 레코드 목록")
 
 

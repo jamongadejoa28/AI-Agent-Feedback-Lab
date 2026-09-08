@@ -11,7 +11,7 @@
 - **`First-AI-Agent` (../ai-agent)**: 질문 의도 파악, 정책 라우팅, Qdrant 벡터 검색, 1차/2차 지식 검색, 답변 생성 등 에이전트의 모든 지능과 정책을 소유합니다.
 - **`AI-Agent-Feedback-Lab` (본 저장소)**:
   - 현장 사용자를 위한 직관적이고 안전한 웹 UI 제공
-  - First-AI-Agent 대상 HTTP 프록시 요청 및 응답(`answer` 필드) 추출
+  - First-AI-Agent 대화 큐 HTTP 요청 및 SSE 원본 응답의 실시간 프록시
   - 익명 테스터 식별자(`feedback_tester_id`) 기반 세션 격리
   - Agent 호출 전 `processing` 선예약 및 멱등성 보장
   - 원했던 답변 및 개선 피드백 수집 및 SQLite WAL 저장
@@ -33,7 +33,8 @@
 | - 포트: 8080                                                |
 | - 주요역할: 입력검증, 세션격리, processing 선예약, 피드백저장  |
 +-------------------------------------------------------------+
-                            │ HTTP POST /v1/query {"query": "..."}
+                            │ HTTP POST /v1/chat/messages
+                            │ HTTP GET /v1/chat/messages/{id}/events (SSE)
                             ▼
 +-------------------------------------------------------------+
 | First-AI-Agent (FastAPI, LangGraph, Qdrant Client)          |
@@ -77,7 +78,8 @@ AI-Agent-Feedback-Lab/
 │
 ├─ pipeline/                 # 데이터 파이프라인
 │  ├─ __init__.py
-│  └─ export_feedback.py     # 완료된 피드백 원자적 JSONL 익스포트 CLI
+│  ├─ export_feedback.py     # 완료된 피드백 원자적 JSONL 익스포트 CLI
+│  └─ delete_feedback.py     # 완료된 피드백 선택 삭제 CLI
 │
 ├─ data/                     # 로컬 데이터 디렉토리 (Git 미추적)
 │  └─ exports/               # 일자별 JSONL 익스포트 저장 위치
@@ -141,11 +143,22 @@ AGENT_TIMEOUT_SECONDS=30.0
 | `GET` | `/api/health` | 서비스 생존 여부, DB 및 정책 파일 상태 점검 |
 | `GET` | `/api/policy-info` | First-AI-Agent의 공식 다운로드/수리 접수 URL 및 문의처 제공 |
 | `GET` | `/api/feedbacks/stats` | 헤더 알림 배지용 완료 피드백 총 건수 조회 |
-| `GET` | `/api/feedbacks` | 테스터들의 다양한 테스트 유도를 위한 완료 피드백 목록 조회 |
+| `GET` | `/api/feedbacks` | 완료 피드백의 DB 전체 검색 및 페이지 단위 목록 조회 |
 | `POST` | `/api/test` | 질문 접수, `processing` 선예약, Agent 호출 및 답변 반환 |
+| `POST` | `/api/test/stream` | 질문 선예약 후 Agent 큐·SSE 응답을 NDJSON으로 실시간 전달 |
 | `POST` | `/api/test/{test_id}/feedback` | 평가 피드백(원했던 응답) 저장 및 `completed` 완료 처리 |
+| `POST` | `/api/test/{test_id}/cancel` | 현재 테스터의 피드백 대기 테스트를 `cancelled`로 종료 |
 
 > **데이터 열람 및 격리 원칙**: 테스터들은 `/history`를 통해 등록된 완료 피드백(`status = 'completed'`)을 상호 열람하여 다양한 테스트 아이디어를 얻을 수 있으며, 타인의 진행 중인 테스트 수정이나 세션 탈취를 방지하기 위해 타인의 `test_id`로 피드백을 요청할 경우 `404 Not Found`를 반환합니다.
+
+평가 화면은 `/api/test/stream`을 사용합니다. Agent 큐의 대기 상태와 생성 delta를
+도착 순서대로 표시하고, `completed` 이벤트의 전체 원문을 최종 화면과 SQLite에
+동일하게 저장합니다. SSE 읽기에는 고정된 전체 응답 제한 시간을 두지 않으므로
+다중 접속자가 큐에서 기다리는 동안 30초 제한으로 일괄 실패하지 않습니다.
+
+피드백 모아보기는 `page`, `page_size`, `q` 쿼리 매개변수를 사용합니다. 검색은
+현재 브라우저 페이지가 아니라 SQLite의 모든 완료 피드백에서 질문, Agent 응답,
+기대 응답을 대상으로 수행하며, 페이지당 1~100건을 조회할 수 있습니다.
 
 ---
 
@@ -162,11 +175,12 @@ AGENT_TIMEOUT_SECONDS=30.0
     │
     ├─► First-AI-Agent 호출 성공 ──► status = 'awaiting_feedback'
     │                                          │
-    │                                          ▼
-    │                                (사용자 피드백 제출)
-    │                                          │
-    │                                          ▼
-    │                                  status = 'completed'
+    │                      ┌───────────────────┴───────────────────┐
+    │                      ▼                                       ▼
+    │              (사용자 피드백 제출)                         (취소)
+    │                      │                                       │
+    │                      ▼                                       ▼
+    │              status = 'completed'                   status = 'cancelled'
     │
     └─► Agent 호출 실패/계약 위반 ──► status = 'failed'
 ```
@@ -176,7 +190,7 @@ AGENT_TIMEOUT_SECONDS=30.0
 1. **동일 tester_id + 동일 client_request_id + 동일 question**:
    - 기존 상태가 `awaiting_feedback` 또는 `completed`: 기존 테스트 결과(`test_id`, `answer`, `latency_ms`)를 즉시 재사용하여 반환합니다.
    - 기존 상태가 `processing`: 중복 Agent 호출을 방지하기 위해 `409 Conflict` ("요청이 이미 처리 중입니다")를 반환합니다.
-   - 기존 상태가 `failed`: 자동 재실행을 방지하며, 사용자는 UI에서 '새 테스트'를 눌러 신규 `client_request_id`로 재시도해야 합니다.
+   - 기존 상태가 `failed` 또는 `cancelled`: 자동 재실행을 방지하며, 사용자는 UI에서 '새 테스트'를 눌러 신규 `client_request_id`로 재시도해야 합니다.
 2. **동일 tester_id + 동일 client_request_id + 다른 question**:
    - `409 Conflict`를 반환하고 기존 레코드를 절대 덮어쓰지 않습니다.
 
@@ -196,6 +210,26 @@ AGENT_TIMEOUT_SECONDS=30.0
 
 - **저장 위치**: `data/exports/YYYY-MM-DD.jsonl`
 - **원자적 교체**: 임시 파일(`.tmp`)에 전체 정렬 데이터를 기록한 뒤 `os.replace`로 원자적으로 교체하므로, 중복 라인이 발생하지 않으며 안전한 멱등 실행이 보장됩니다.
+
+### 7.1 완료 피드백 삭제
+
+개발자는 터미널에서 완료된 피드백을 ID, 한국 날짜, 전체 범위로 삭제할 수 있습니다.
+명령은 기본적으로 `삭제` 확인 문구를 요구하며, `--yes`는 자동화할 때만 사용합니다.
+`processing`, `awaiting_feedback`, `failed`, `cancelled` 레코드는 삭제 대상에서 제외됩니다.
+
+```bash
+# 단일 피드백 삭제
+.venv/bin/python -m pipeline.delete_feedback --id TEST_ID
+
+# 특정 날짜의 완료 피드백 삭제
+.venv/bin/python -m pipeline.delete_feedback --date 2026-09-08
+
+# 모든 완료 피드백 삭제: 확인 문구 입력
+.venv/bin/python -m pipeline.delete_feedback --all
+
+# 자동화 환경에서 확인 생략
+.venv/bin/python -m pipeline.delete_feedback --all --yes
+```
 
 ---
 

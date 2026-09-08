@@ -1,14 +1,17 @@
 /**
  * 피드백 모아보기 화면 제어 스크립트.
  *
- * GET /api/feedbacks에서 데이터를 조회하여 안전한 DOM 렌더링으로 피드백 목록을 표시합니다.
- * 실시간 검색 및 새로고침 기능을 제공합니다.
+ * GET /api/feedbacks의 서버 검색·페이지네이션을 사용해 전체 DB를 탐색하고,
+ * 현재 페이지의 결과를 안전한 DOM 렌더링으로 표시합니다.
  */
 
 (function () {
     "use strict";
 
-    let allFeedbacks = [];
+    let currentPage = 1;
+    let totalPages = 1;
+    let searchTimer = null;
+    let activeRequest = null;
 
     const historyTotalCount = document.getElementById("history-total-count");
     const searchInput = document.getElementById("search-input");
@@ -16,6 +19,11 @@
     const loadingIndicator = document.getElementById("history-loading");
     const listContainer = document.getElementById("feedback-list-container");
     const emptyStateCard = document.getElementById("empty-state-card");
+    const pagination = document.getElementById("history-pagination");
+    const pageSizeSelect = document.getElementById("page-size-select");
+    const btnPrevPage = document.getElementById("btn-prev-page");
+    const btnNextPage = document.getElementById("btn-next-page");
+    const pageStatus = document.getElementById("page-status");
 
     /**
      * 마크다운 링크([표시명](http/https))를 안전한 DOM 엘리먼트로 변환하여 부모 노드에 추가합니다.
@@ -159,56 +167,83 @@
     }
 
     /**
-     * 검색어 필터링을 수행합니다.
-     */
-    function filterFeedbacks() {
-        const query = (searchInput.value || "").trim().toLowerCase();
-        if (!query) {
-            renderFeedbacks(allFeedbacks);
-            return;
-        }
-
-        const filtered = allFeedbacks.filter((item) => {
-            const q = (item.question || "").toLowerCase();
-            const a = (item.agent_response || "").toLowerCase();
-            const e = (item.expected_response || "").toLowerCase();
-            return q.includes(query) || a.includes(query) || e.includes(query);
-        });
-
-        renderFeedbacks(filtered);
-    }
-
-    /**
-     * 서버로부터 최신 피드백 목록을 조회합니다.
+     * 현재 검색어와 페이지를 서버에 전달해 DB 전체 범위의 결과를 조회합니다.
+     *
+     * 검색어를 빠르게 바꾸거나 페이지 버튼을 연속으로 누르면 이전 fetch를
+     * 취소합니다. 늦게 도착한 과거 응답이 최신 화면을 덮는 경쟁 상태를 막기
+     * 위한 처리입니다.
      */
     async function loadFeedbacks() {
+        if (activeRequest) activeRequest.abort();
+        const requestController = new AbortController();
+        activeRequest = requestController;
+
         loadingIndicator.classList.remove("hidden");
         listContainer.classList.add("hidden");
         emptyStateCard.classList.add("hidden");
 
         try {
-            const res = await fetch("/api/feedbacks?limit=200");
+            const params = new URLSearchParams({
+                page: String(currentPage),
+                page_size: String(Number(pageSizeSelect.value)),
+            });
+            const query = (searchInput.value || "").trim();
+            if (query) params.set("q", query);
+
+            const res = await fetch(`/api/feedbacks?${params.toString()}`, {
+                signal: requestController.signal,
+            });
             if (!res.ok) throw new Error("피드백 조회 실패");
 
             const data = await res.json();
-            allFeedbacks = data.items || [];
-            const total = data.total_count || allFeedbacks.length;
+            const items = data.items || [];
+            const total = Number(data.total_count || 0);
+            currentPage = Number(data.page || 1);
+            totalPages = Math.max(Number(data.total_pages || 0), 1);
 
             historyTotalCount.textContent = `${total.toLocaleString()}건`;
-            filterFeedbacks();
+            pageStatus.textContent = `${currentPage.toLocaleString()} / ${totalPages.toLocaleString()}`;
+            btnPrevPage.disabled = currentPage <= 1;
+            btnNextPage.disabled = currentPage >= totalPages;
+            pagination.classList.toggle("hidden", total === 0);
+            renderFeedbacks(items);
         } catch (err) {
+            if (err instanceof DOMException && err.name === "AbortError") return;
             historyTotalCount.textContent = "-";
-            allFeedbacks = [];
+            pagination.classList.add("hidden");
             renderFeedbacks([]);
         } finally {
-            loadingIndicator.classList.add("hidden");
-            listContainer.classList.remove("hidden");
+            if (activeRequest === requestController) {
+                activeRequest = null;
+                loadingIndicator.classList.add("hidden");
+                listContainer.classList.remove("hidden");
+            }
         }
     }
 
     // 이벤트 리스너
     btnRefresh.addEventListener("click", loadFeedbacks);
-    searchInput.addEventListener("input", filterFeedbacks);
+    searchInput.addEventListener("input", function () {
+        if (searchTimer) window.clearTimeout(searchTimer);
+        searchTimer = window.setTimeout(function () {
+            currentPage = 1;
+            loadFeedbacks();
+        }, 250);
+    });
+    btnPrevPage.addEventListener("click", function () {
+        if (currentPage <= 1) return;
+        currentPage -= 1;
+        loadFeedbacks();
+    });
+    btnNextPage.addEventListener("click", function () {
+        if (currentPage >= totalPages) return;
+        currentPage += 1;
+        loadFeedbacks();
+    });
+    pageSizeSelect.addEventListener("change", function () {
+        currentPage = 1;
+        loadFeedbacks();
+    });
 
     // 초기 로딩
     loadFeedbacks();

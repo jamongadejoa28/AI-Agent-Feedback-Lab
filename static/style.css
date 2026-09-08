@@ -650,3 +650,56 @@ textarea:disabled {
     color: var(--text-primary);
     margin-bottom: 6px;
 }
+
+/* 검색 결과가 많아도 전체 DB를 이동할 수 있는 페이지 탐색 영역 */
+.history-pagination {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    padding: 12px 4px;
+    color: var(--text-secondary);
+    font-size: 0.9rem;
+}
+
+.history-pagination label,
+.pagination-buttons {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.history-pagination select {
+    padding: 6px 8px;
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+    background: var(--card-bg);
+    color: var(--text-primary);
+}
+
+.pagination-buttons .btn-sm {
+    margin-top: 0;
+}
+
+#page-status {
+    min-width: 72px;
+    text-align: center;
+    font-weight: 500;
+    color: var(--text-primary);
+}
+
+@media (max-width: 600px) {
+    .toolbar-right,
+    .history-pagination {
+        width: 100%;
+    }
+
+    .search-box,
+    .search-box input {
+        width: 100%;
+    }
+
+    .history-pagination {
+        flex-direction: column;
+    }
+}

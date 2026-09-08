@@ -24,7 +24,7 @@
         <!-- 상단 툴바 (총 건수 배지, 검색 필터, 새로고침) -->
         <section class="card history-toolbar">
             <div class="toolbar-left">
-                <span class="toolbar-stat-label">총 등록 피드백:</span>
+                <span class="toolbar-stat-label">검색 결과:</span>
                 <span id="history-total-count" class="toolbar-stat-badge">0건</span>
             </div>
             <div class="toolbar-right">
@@ -32,7 +32,7 @@
                     <input 
                         type="text" 
                         id="search-input" 
-                        placeholder="질문 또는 피드백 검색..." 
+                        placeholder="전체 DB에서 질문·응답·피드백 검색..."
                         aria-label="피드백 검색"
                     >
                 </div>
@@ -52,6 +52,24 @@
         <section id="feedback-list-container" class="feedback-cards-wrapper">
             <!-- 동적으로 주입되는 피드백 카드들 -->
         </section>
+
+        <!-- 서버 페이지네이션: 검색 조건에 맞는 전체 DB를 페이지 단위로 탐색 -->
+        <nav id="history-pagination" class="history-pagination hidden" aria-label="피드백 목록 페이지 이동">
+            <label for="page-size-select">
+                페이지당
+                <select id="page-size-select">
+                    <option value="10">10건</option>
+                    <option value="20" selected>20건</option>
+                    <option value="50">50건</option>
+                    <option value="100">100건</option>
+                </select>
+            </label>
+            <div class="pagination-buttons">
+                <button type="button" id="btn-prev-page" class="btn btn-secondary btn-sm">이전</button>
+                <span id="page-status" aria-live="polite">1 / 1</span>
+                <button type="button" id="btn-next-page" class="btn btn-secondary btn-sm">다음</button>
+            </div>
+        </nav>
 
         <!-- 빈 데이터 안내 카드 -->
         <div id="empty-state-card" class="card empty-state-card hidden">

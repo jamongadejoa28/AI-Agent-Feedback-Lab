@@ -131,7 +131,7 @@ class Database:
         - 동일 tester + 동일 client_request_id 중복 시:
           - 질문이 다르면: IdempotencyConflictError 발생 (409 Conflict).
           - 질문이 같고 상태가 'processing': InProgressConflictError 발생 (409 Conflict).
-          - 질문이 같고 상태가 'failed': FailedRetryError 발생 (409 Conflict, 새 ID 유도).
+          - 질문이 같고 상태가 'failed' 또는 'cancelled': FailedRetryError 발생 (409 Conflict, 새 ID 유도).
           - 질문이 같고 상태가 'awaiting_feedback' 또는 'completed': 기존 (record, False) 재사용 반환.
 
         반환값:
@@ -190,9 +190,9 @@ class Database:
                     raise InProgressConflictError(
                         "해당 요청은 현재 AI Agent에서 처리 중입니다. 잠시 후 다시 시도해 주세요."
                     )
-                if existing.status == "failed":
+                if existing.status in ("failed", "cancelled"):
                     raise FailedRetryError(
-                        "이전에 실패한 요청입니다. 새 테스트를 시작해 주세요."
+                        "이미 실패했거나 취소된 요청입니다. 새 테스트를 시작해 주세요."
                     )
                 if existing.status in ("awaiting_feedback", "completed"):
                     return existing, False
@@ -272,6 +272,105 @@ class Database:
             conn.execute("COMMIT;")
             return updated
 
+    def cancel_test(self, test_id: str, tester_id: str) -> bool:
+        """현재 테스터가 피드백을 제출하지 않기로 한 테스트를 취소합니다.
+
+        Agent 답변을 끝까지 받은 ``awaiting_feedback`` 상태에서만 ``cancelled``로
+        전환합니다. tester_id 조건으로 다른 사용자의 테스트 취소를 차단하며,
+        이미 완료되거나 취소된 레코드는 변경하지 않습니다.
+
+        반환값:
+            실제로 한 레코드가 취소되었으면 True, 조건에 맞는 레코드가 없으면 False.
+        """
+        with self.get_connection() as conn:
+            conn.execute("BEGIN IMMEDIATE;")
+            cursor = conn.execute(
+                """
+                UPDATE tests
+                SET status = 'cancelled'
+                WHERE id = ? AND tester_id = ? AND status = 'awaiting_feedback';
+                """,
+                (test_id, tester_id),
+            )
+            updated = cursor.rowcount > 0
+            conn.execute("COMMIT;")
+            return updated
+
+    @staticmethod
+    def _completed_delete_filter(
+        *,
+        test_id: Optional[str],
+        test_date: Optional[str],
+        delete_all: bool,
+    ) -> tuple[str, list[Any]]:
+        """완료 피드백 삭제·사전 건수 확인에 공통으로 쓸 SQL 조건을 만듭니다."""
+        selected = sum((bool(test_id), bool(test_date), delete_all))
+        if selected != 1:
+            raise ValueError("test_id, test_date, delete_all 중 정확히 하나를 지정해야 합니다.")
+        if test_id:
+            return " AND id = ?", [test_id]
+        if test_date:
+            return " AND test_date = ?", [test_date]
+        return "", []
+
+    def count_completed_feedbacks_for_deletion(
+        self,
+        *,
+        test_id: Optional[str] = None,
+        test_date: Optional[str] = None,
+        delete_all: bool = False,
+    ) -> int:
+        """CLI 확인 화면에 표시할 선택 범위의 completed 레코드 수를 반환합니다."""
+        suffix, params = self._completed_delete_filter(
+            test_id=test_id,
+            test_date=test_date,
+            delete_all=delete_all,
+        )
+        with self.get_connection() as conn:
+            row = conn.execute(
+                f"SELECT COUNT(*) FROM tests WHERE status = 'completed'{suffix};",
+                tuple(params),
+            ).fetchone()
+            return int(row[0]) if row else 0
+
+    def delete_completed_feedbacks(
+        self,
+        *,
+        test_id: Optional[str] = None,
+        test_date: Optional[str] = None,
+        delete_all: bool = False,
+    ) -> int:
+        """개발자 CLI가 선택한 완료 피드백 레코드를 트랜잭션으로 삭제합니다.
+
+        ID, 한국 날짜, 전체 삭제 중 정확히 한 범위만 허용합니다. processing,
+        awaiting_feedback, failed, cancelled 상태는 어떤 범위에서도 삭제하지 않아
+        운영 중 요청과 진단 데이터를 우발적으로 훼손하지 않습니다.
+
+        반환값:
+            실제 삭제된 ``completed`` 레코드 수.
+
+        예외:
+            삭제 범위가 없거나 둘 이상이면 ValueError를 발생시킵니다. SQLite 오류가
+            발생하면 트랜잭션을 rollback한 뒤 원래 예외를 다시 전달합니다.
+        """
+        suffix, params = self._completed_delete_filter(
+            test_id=test_id,
+            test_date=test_date,
+            delete_all=delete_all,
+        )
+        query = f"DELETE FROM tests WHERE status = 'completed'{suffix};"
+
+        with self.get_connection() as conn:
+            try:
+                conn.execute("BEGIN IMMEDIATE;")
+                cursor = conn.execute(query, tuple(params))
+                deleted = max(cursor.rowcount, 0)
+                conn.execute("COMMIT;")
+                return deleted
+            except Exception:
+                conn.execute("ROLLBACK;")
+                raise
+
     def get_test_by_id_and_tester(
         self,
         test_id: str,
@@ -305,30 +404,69 @@ class Database:
             cursor = conn.execute(query, tuple(params))
             return [TestRecord.from_row(row) for row in cursor.fetchall()]
 
-    def get_completed_count(self) -> int:
-        """등록 완료된(completed) 피드백 레코드의 총 개수를 반환합니다.
+    @staticmethod
+    def _feedback_search(search: Optional[str]) -> tuple[str, list[Any]]:
+        """완료 피드백 검색용 SQL 조건과 바인딩 값을 만듭니다.
 
-        헤더 배지 알림 카운트 및 익스포트 전 데이터 수량 확인에 사용됩니다.
+        사용자가 입력한 ``%``와 ``_``를 LIKE 와일드카드로 해석하지 않고 문자
+        그대로 검색합니다. 질문, Agent 원본 응답, 기대 응답 세 필드를 DB에서
+        함께 검색하므로 브라우저에 내려받지 않은 과거 페이지도 검색 대상입니다.
         """
+        normalized = (search or "").strip()
+        if not normalized:
+            return "", []
+        escaped = (
+            normalized.replace("\\", "\\\\")
+            .replace("%", "\\%")
+            .replace("_", "\\_")
+        )
+        pattern = f"%{escaped}%"
+        clause = """
+            AND (
+                question LIKE ? ESCAPE '\\'
+                OR agent_response LIKE ? ESCAPE '\\'
+                OR expected_response LIKE ? ESCAPE '\\'
+            )
+        """
+        return clause, [pattern, pattern, pattern]
+
+    def get_completed_count(self, search: Optional[str] = None) -> int:
+        """검색 조건에 맞는 완료 피드백 레코드 수를 반환합니다.
+
+        검색어가 없으면 헤더 배지에서 사용하는 전체 완료 건수이며, 검색어가
+        있으면 페이지네이션의 페이지 수 계산에 사용할 필터 결과 건수입니다.
+        """
+        search_clause, params = self._feedback_search(search)
+        query = f"SELECT COUNT(*) FROM tests WHERE status = 'completed' {search_clause};"
         with self.get_connection() as conn:
-            cursor = conn.execute("SELECT COUNT(*) FROM tests WHERE status = 'completed';")
+            cursor = conn.execute(query, tuple(params))
             row = cursor.fetchone()
             return int(row[0]) if row else 0
 
     def get_feedbacks_list(
         self,
-        limit: int = 100,
+        limit: int = 20,
         offset: int = 0,
+        search: Optional[str] = None,
     ) -> list[TestRecord]:
-        """피드백 모아보기 화면 조회를 위해 완료된 레코드를 최신 등록순(created_at DESC)으로 조회합니다."""
-        query = """
+        """검색 조건과 페이지 범위에 맞는 완료 피드백을 최신순으로 조회합니다.
+
+        ``limit``과 ``offset``은 API에서 검증되지만 파이프라인이나 테스트가 직접
+        호출해도 음수 범위가 SQL 의미를 바꾸지 않도록 여기서 한 번 더 보정합니다.
+        """
+        safe_limit = max(1, limit)
+        safe_offset = max(0, offset)
+        search_clause, params = self._feedback_search(search)
+        query = f"""
             SELECT * FROM tests 
             WHERE status = 'completed'
+            {search_clause}
             ORDER BY created_at DESC, id DESC
             LIMIT ? OFFSET ?;
         """
+        params.extend([safe_limit, safe_offset])
         with self.get_connection() as conn:
-            cursor = conn.execute(query, (limit, offset))
+            cursor = conn.execute(query, tuple(params))
             return [TestRecord.from_row(row) for row in cursor.fetchall()]
 
 

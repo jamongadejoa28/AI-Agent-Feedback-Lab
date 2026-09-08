@@ -6,14 +6,17 @@ R4, R5, R6, R7, R8, R9, R11에 따라:
 - 헬스체크 및 정책 정보 조회 API를 제공합니다.
 """
 
+import asyncio
+import json
+import time
 import uuid
 from collections.abc import Awaitable
 from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import AsyncIterator, Callable
 
-from fastapi import FastAPI, HTTPException, Request, Response, status
-from fastapi.responses import FileResponse
+from fastapi import FastAPI, HTTPException, Query, Request, Response, status
+from fastapi.responses import FileResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 
 from app.agent_client import (
@@ -150,12 +153,21 @@ async def get_feedback_stats() -> FeedbackStatsResponse:
 
 @app.get("/api/feedbacks", response_model=FeedbackListResponse, summary="완료된 피드백 목록 조회")
 async def get_feedbacks(
-    limit: int = 100,
-    offset: int = 0,
+    page: int = Query(default=1, ge=1),
+    page_size: int = Query(default=20, ge=1, le=100),
+    q: str = Query(default="", max_length=200),
 ) -> FeedbackListResponse:
-    """테스터들의 다양한 테스트 유도 및 사전 확인을 위해 완료된 피드백 목록을 반환합니다."""
-    total = db.get_completed_count()
-    records = db.get_feedbacks_list(limit=limit, offset=offset)
+    """완료 피드백을 DB 전체 검색하고 요청한 페이지 범위만 반환합니다.
+
+    검색어는 질문, Agent 원본 응답, 기대 응답에 적용됩니다. 서버 측 검색과
+    페이지네이션을 함께 수행하여 데이터가 200건을 넘어도 모든 레코드에 접근할
+    수 있으며, 한 요청이 과도한 데이터를 브라우저로 전송하지 않도록 제한합니다.
+    """
+    search = q.strip()
+    total = db.get_completed_count(search=search)
+    total_pages = (total + page_size - 1) // page_size
+    offset = (page - 1) * page_size
+    records = db.get_feedbacks_list(limit=page_size, offset=offset, search=search)
     items = [
         FeedbackItemResponse(
             id=r.id,
@@ -168,7 +180,13 @@ async def get_feedbacks(
         )
         for r in records
     ]
-    return FeedbackListResponse(total_count=total, items=items)
+    return FeedbackListResponse(
+        total_count=total,
+        page=page,
+        page_size=page_size,
+        total_pages=total_pages,
+        items=items,
+    )
 
 
 @app.get("/api/health", response_model=HealthResponse, summary="서비스 헬스체크")
@@ -286,6 +304,167 @@ async def run_test(
         answer=answer,
         latency_ms=latency_ms,
     )
+
+
+def _ndjson_event(event_type: str, **data: object) -> str:
+    """브라우저 스트림에 전달할 한 이벤트를 UTF-8 NDJSON 한 줄로 직렬화합니다.
+
+    JSON 문자열 안의 줄바꿈은 이스케이프되므로 실제 줄바꿈 하나가 곧 이벤트
+    경계가 됩니다. 이 계약 덕분에 fetch ReadableStream이 청크를 임의 위치에서
+    나누더라도 브라우저가 버퍼에 이어 붙여 안전하게 복원할 수 있습니다.
+    """
+    return json.dumps({"type": event_type, **data}, ensure_ascii=False) + "\n"
+
+
+@app.post(
+    "/api/test/stream",
+    summary="단일 턴 테스트 실행 및 Agent 답변 실시간 스트리밍",
+)
+async def stream_test(
+    payload: TestCreateRequest,
+    request: Request,
+) -> StreamingResponse:
+    """Agent의 큐·SSE API를 중계하고 최종 원본 답변을 DB에 저장합니다.
+
+    Agent 호출 전 processing 상태를 선예약하는 멱등성 계약은 기존 API와
+    동일합니다. 예약 이후에는 즉시 NDJSON 응답을 시작하고, Agent의 delta를
+    순서대로 전달합니다. 최종 저장과 완료 이벤트에는 delta 조합값이 아닌 Agent
+    ``completed`` 이벤트의 전체 content를 사용하여 마지막 청크 누락이나 중복으로
+    답변이 잘리는 일을 방지합니다.
+    """
+    tester_id: str = getattr(request.state, "tester_id", None) or str(uuid.uuid4())
+    try:
+        record, is_new = db.reserve_test(
+            tester_id=tester_id,
+            client_request_id=payload.client_request_id,
+            question=payload.question,
+        )
+    except (IdempotencyConflictError, InProgressConflictError, FailedRetryError) as exc:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
+    except DatabaseError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"데이터베이스 예약 오류: {exc}",
+        ) from exc
+
+    async def generate_events() -> AsyncIterator[str]:
+        """예약 결과와 Agent 이벤트를 NDJSON으로 변환하고 상태 전이를 확정합니다."""
+        # 일부 Windows·모바일 중간 경로는 첫 수 KB를 모은 뒤 브라우저에 전달합니다.
+        # 의미 없는 별도 청크 대신 accepted JSON에 무시 가능한 여백을 포함하여 대기
+        # 상태가 즉시 표시되도록 하며, 이후 이벤트의 원본 content에는 영향이 없습니다.
+        yield _ndjson_event("accepted", test_id=record.id, padding=" " * 2048)
+
+        # 완료되었거나 피드백 대기 중인 멱등 재호출은 Agent를 다시 호출하지 않고
+        # DB에 보존된 원문을 하나의 완료 이벤트로 반환합니다.
+        if not is_new and record.agent_response is not None:
+            yield _ndjson_event(
+                "completed",
+                test_id=record.id,
+                answer=record.agent_response,
+                latency_ms=record.latency_ms or 0,
+                reused=True,
+            )
+            return
+
+        started_at = time.perf_counter()
+        completed = False
+        try:
+            async for event in agent_client.stream_query(
+                payload.question,
+                record.id,
+            ):
+                event_type = str(event.get("type", ""))
+                event_data = event.get("data")
+                if not isinstance(event_data, dict):
+                    raise AgentContractError("Agent SSE 이벤트 data가 객체가 아닙니다.")
+
+                if event_type == "queued":
+                    yield _ndjson_event("queued", position=event_data.get("position"))
+                elif event_type == "started":
+                    yield _ndjson_event("started")
+                elif event_type == "delta":
+                    delta = event_data.get("content")
+                    if not isinstance(delta, str):
+                        raise AgentContractError("Agent delta 이벤트에 문자열 content가 없습니다.")
+                    yield _ndjson_event("delta", content=delta)
+                elif event_type == "completed":
+                    message = event_data.get("message")
+                    if not isinstance(message, dict) or not isinstance(message.get("content"), str):
+                        raise AgentContractError(
+                            "Agent completed 이벤트에 문자열 content가 없습니다."
+                        )
+                    answer = message["content"]
+                    latency_ms = int((time.perf_counter() - started_at) * 1000)
+                    if not db.update_test_success(record.id, answer, latency_ms):
+                        raise DatabaseError("Agent 성공 결과의 상태 전이를 적용할 수 없습니다.")
+                    completed = True
+                    yield _ndjson_event(
+                        "completed",
+                        test_id=record.id,
+                        answer=answer,
+                        latency_ms=latency_ms,
+                        reused=False,
+                    )
+                    return
+
+            if not completed:
+                raise AgentContractError("Agent 스트림이 완료 답변 없이 종료되었습니다.")
+        except asyncio.CancelledError:
+            # 브라우저가 연결을 끊으면 이 요청에서는 더 이상 완성 답변을 받을 수
+            # 없습니다. processing 레코드를 남기지 않도록 실패로 종결합니다.
+            db.update_test_failure(record.id, "브라우저 스트림 연결이 종료되었습니다.")
+            raise
+        except AgentTimeoutError as exc:
+            latency_ms = int((time.perf_counter() - started_at) * 1000)
+            db.update_test_failure(record.id, str(exc), latency_ms)
+            yield _ndjson_event(
+                "error",
+                message="AI Agent 연결 시간이 초과되었습니다. 새 테스트로 다시 시도해 주세요.",
+            )
+        except (AgentConnectionError, AgentHTTPError, AgentContractError, AgentClientError) as exc:
+            latency_ms = int((time.perf_counter() - started_at) * 1000)
+            db.update_test_failure(record.id, str(exc), latency_ms)
+            yield _ndjson_event(
+                "error",
+                message="AI Agent 응답을 끝까지 받지 못했습니다. 새 테스트로 다시 시도해 주세요.",
+            )
+        except Exception as exc:
+            latency_ms = int((time.perf_counter() - started_at) * 1000)
+            db.update_test_failure(record.id, str(exc), latency_ms)
+            yield _ndjson_event(
+                "error",
+                message="테스트 결과를 저장하는 중 오류가 발생했습니다. 새 테스트로 다시 시도해 주세요.",
+            )
+
+    return StreamingResponse(
+        generate_events(),
+        media_type="application/x-ndjson",
+        headers={
+            "Cache-Control": "no-cache, no-transform",
+            "X-Accel-Buffering": "no",
+        },
+    )
+
+
+@app.post(
+    "/api/test/{test_id}/cancel",
+    status_code=status.HTTP_204_NO_CONTENT,
+    summary="피드백 입력 취소 및 테스트 종료",
+)
+async def cancel_test(test_id: str, request: Request) -> Response:
+    """현재 테스터가 피드백을 남기지 않기로 한 테스트를 취소합니다.
+
+    소유자가 일치하는 awaiting_feedback 레코드만 cancelled로 전환합니다. 타인의
+    레코드나 이미 완료된 레코드는 존재 여부와 상태를 구분하지 않고 404로 반환해
+    세션 격리와 피드백 불변성을 유지합니다.
+    """
+    tester_id: str = getattr(request.state, "tester_id", None) or ""
+    if not db.cancel_test(test_id=test_id, tester_id=tester_id):
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="취소할 테스트 레코드를 찾을 수 없거나 이미 종료된 상태입니다.",
+        )
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
 @app.post(

@@ -162,3 +162,43 @@ def test_idempotency_failed_retry_rejected(temp_db: Database) -> None:
 
     with pytest.raises(FailedRetryError):
         temp_db.reserve_test(tester_id, client_req_id, question)
+
+
+def test_cancel_test_enforces_owner_and_state(temp_db: Database) -> None:
+    """피드백 대기 레코드만 소유 테스터가 취소할 수 있는지 검증합니다."""
+    owner_id = str(uuid.uuid4())
+    record, _ = temp_db.reserve_test(owner_id, str(uuid.uuid4()), "취소할 질문")
+    temp_db.update_test_success(record.id, "취소할 답변", 100)
+
+    assert temp_db.cancel_test(record.id, str(uuid.uuid4())) is False
+    assert temp_db.cancel_test(record.id, owner_id) is True
+    assert temp_db.cancel_test(record.id, owner_id) is False
+
+    cancelled = temp_db.get_test_by_id_and_tester(record.id, owner_id)
+    assert cancelled is not None
+    assert cancelled.status == "cancelled"
+    assert temp_db.save_feedback(record.id, owner_id, "뒤늦은 피드백") is False
+
+
+def test_delete_completed_feedbacks_preserves_other_states(temp_db: Database) -> None:
+    """개발자 삭제가 선택한 completed 행만 제거하고 대기 레코드는 보존하는지 검증합니다."""
+    tester_id = str(uuid.uuid4())
+    first, _ = temp_db.reserve_test(tester_id, str(uuid.uuid4()), "삭제 대상 1")
+    temp_db.update_test_success(first.id, "답변 1", 100)
+    temp_db.save_feedback(first.id, tester_id, "피드백 1")
+
+    second, _ = temp_db.reserve_test(tester_id, str(uuid.uuid4()), "삭제 대상 2")
+    temp_db.update_test_success(second.id, "답변 2", 100)
+    temp_db.save_feedback(second.id, tester_id, "피드백 2")
+
+    awaiting, _ = temp_db.reserve_test(tester_id, str(uuid.uuid4()), "보존할 대기 레코드")
+    temp_db.update_test_success(awaiting.id, "대기 답변", 100)
+
+    assert temp_db.delete_completed_feedbacks(test_id=first.id) == 1
+    assert temp_db.get_completed_count() == 1
+    assert temp_db.delete_completed_feedbacks(delete_all=True) == 1
+    assert temp_db.get_completed_count() == 0
+    assert temp_db.get_test_by_id_and_tester(awaiting.id, tester_id) is not None
+
+    with pytest.raises(ValueError, match="정확히 하나"):
+        temp_db.delete_completed_feedbacks()
