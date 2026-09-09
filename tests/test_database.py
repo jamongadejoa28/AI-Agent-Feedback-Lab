@@ -6,7 +6,6 @@ R7, R10에 따라:
 - UNIQUE(tester_id, client_request_id) 제약 조건 및 충돌 처리를 확인합니다.
 """
 
-import sqlite3
 import tempfile
 import uuid
 from pathlib import Path

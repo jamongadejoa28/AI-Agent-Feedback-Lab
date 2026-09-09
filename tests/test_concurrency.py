@@ -43,9 +43,11 @@ def test_concurrent_multi_tester_reservations(temp_db: Database) -> None:
     assert len(results) == num_requests
     assert all(is_new for _, is_new in results)
 
-    # 전체 완료 레코드 수 확인
+    # update_test_success는 awaiting_feedback 상태이므로 완료 목록에는 포함되지 않아야 함
     completed = temp_db.get_completed_tests()
-    # update_test_success는 awaiting_feedback 상태이므로 count는 0이어야 함
+    assert completed == []
+
+    # 동시에 생성한 테스트 레코드는 상태와 관계없이 모두 저장되어야 함
     with temp_db.get_connection() as conn:
         count = conn.execute("SELECT COUNT(*) FROM tests;").fetchone()[0]
         assert count == num_requests

@@ -20,7 +20,7 @@ from unittest.mock import AsyncMock, patch
 import httpx
 import pytest
 
-from app.agent_client import AgentConnectionError, AgentContractError, AgentTimeoutError
+from app.agent_client import AgentConnectionError
 from app.database import Database
 from app.main import app
 import app.main as main_module
