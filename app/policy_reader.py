@@ -18,7 +18,7 @@ DEFAULT_POLICY_INFO: dict[str, Any] = {
     "manual_url": "https://www.msti.co.kr/download/02/",
     "repair_url": "https://www.msti.co.kr/customer/05/",
     "contacts": {
-        "기술연구소 (기술문의)": "070-8666-3069",
+        "기술연구소 (기술문의)": "070-8666-3005",
         "마케팅 (매뉴얼/구매)": "070-8666-4272",
     },
 }
@@ -56,10 +56,7 @@ class PolicyReader:
             manual_url = operation_howto.get("url") or DEFAULT_POLICY_INFO["manual_url"]
             repair_url = repair_or_as.get("url") or DEFAULT_POLICY_INFO["repair_url"]
 
-            contacts: dict[str, str] = {
-                "기술연구소 (기술문의)": "070-8666-3069",
-                "마케팅 (매뉴얼/구매)": "070-8666-4272",
-            }
+            contacts = DEFAULT_POLICY_INFO["contacts"].deepcopy()
 
             return {
                 "manual_url": manual_url,

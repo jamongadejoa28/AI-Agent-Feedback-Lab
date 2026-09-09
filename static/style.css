@@ -546,7 +546,7 @@ textarea:disabled {
     border: 1px solid var(--border-color);
     border-radius: 6px;
     font-size: 0.88rem;
-    width: 220px;
+    width: 500px;
     transition: border-color 0.2s;
 }
 
