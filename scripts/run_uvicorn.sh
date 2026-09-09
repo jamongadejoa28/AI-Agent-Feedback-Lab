@@ -2,7 +2,7 @@
 # First-AI-Agent Feedback Lab 로컬 개발 서버 실행 스크립트
 #
 # 설정된 환경 변수(HOST, PORT)를 참조하여 uvicorn 개발 서버를 실행합니다.
-# 기본 바인딩: HOST=0.0.0.0, PORT=8080 (--reload 활성화)
+# 기본 바인딩: HOST=0.0.0.0, PORT=8001 (--reload 활성화)
 
 set -euo pipefail
 

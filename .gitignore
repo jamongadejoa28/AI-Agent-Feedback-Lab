@@ -33,3 +33,4 @@ dist/
 htmlcov/
 .pyright/
 .ruff_cache/
+.codegraph/
