@@ -1,8 +1,9 @@
-"""완료된 피드백 레코드를 선택적으로 삭제하는 개발자용 CLI.
+"""완료된 피드백 레코드를 숫자 관리 ID 등으로 선택해 삭제하는 개발자용 CLI.
 
-ID 한 건, 한국 날짜별, 전체 완료 피드백 중 하나의 범위를 명시해야 하며 기본적으로
-터미널 확인 문구를 요구합니다. 자동화 환경에서는 ``--yes``로 확인 단계를 생략할
-수 있습니다. 진행 중이거나 피드백 대기·실패·취소 상태인 레코드는 삭제하지 않습니다.
+history 카드에 표시되는 숫자 ID 한 건, 한국 날짜별, 전체 완료 피드백 중 하나의
+범위를 명시해야 하며 기본적으로 터미널 확인 문구를 요구합니다. 자동화 환경에서는
+``--yes``로 확인 단계를 생략할 수 있습니다. 진행 중이거나 피드백 대기·실패·취소
+상태인 레코드는 삭제하지 않습니다.
 """
 
 import argparse
@@ -20,6 +21,24 @@ if str(project_root) not in sys.path:
 from app.database import Database, db
 
 
+def validate_record_id(value: str) -> int:
+    """history 카드의 관리 ID에 해당하는 1 이상의 정수만 허용합니다.
+
+    문자열 UUID나 0 이하의 값을 초기에 거부해, 개발자가 다른 식별자를 실수로
+    입력했을 때 삭제 조회 단계까지 진행되지 않게 합니다.
+
+    예외:
+        값이 양의 정수가 아니면 argparse.ArgumentTypeError를 발생시킵니다.
+    """
+    try:
+        record_id = int(value)
+    except ValueError as exc:
+        raise argparse.ArgumentTypeError("ID는 1 이상의 정수여야 합니다.") from exc
+    if record_id < 1:
+        raise argparse.ArgumentTypeError("ID는 1 이상의 정수여야 합니다.")
+    return record_id
+
+
 def validate_date(value: str) -> str:
     """YYYY-MM-DD 형식의 실제 달력 날짜만 argparse 값으로 허용합니다."""
     try:
@@ -32,7 +51,7 @@ def validate_date(value: str) -> str:
 def count_records(
     database: Database,
     *,
-    record_id: Optional[str],
+    record_id: Optional[int],
     target_date: Optional[str],
     delete_all: bool,
 ) -> int:
@@ -43,7 +62,7 @@ def count_records(
     메모리 사용량이 데이터 건수에 비례해 증가하지 않습니다.
     """
     return database.count_completed_feedbacks_for_deletion(
-        test_id=record_id,
+        feedback_id=record_id,
         test_date=target_date,
         delete_all=delete_all,
     )
@@ -51,7 +70,7 @@ def count_records(
 
 def run_delete(
     *,
-    record_id: Optional[str] = None,
+    record_id: Optional[int] = None,
     target_date: Optional[str] = None,
     delete_all: bool = False,
     assume_yes: bool = False,
@@ -78,7 +97,7 @@ def run_delete(
         print("[-] 조건에 맞는 완료 피드백이 없습니다.")
         return 0
 
-    if record_id:
+    if record_id is not None:
         scope = f"ID {record_id}"
     elif target_date:
         scope = f"날짜 {target_date}"
@@ -93,7 +112,7 @@ def run_delete(
             return 0
 
     deleted = active_db.delete_completed_feedbacks(
-        test_id=record_id,
+        feedback_id=record_id,
         test_date=target_date,
         delete_all=delete_all,
     )
@@ -105,7 +124,12 @@ def main() -> None:
     """명령행 옵션을 검증하고 선택 범위의 피드백 삭제를 실행합니다."""
     parser = argparse.ArgumentParser(description="완료된 Feedback Lab 피드백 삭제 도구")
     scope = parser.add_mutually_exclusive_group(required=True)
-    scope.add_argument("--id", dest="record_id", help="삭제할 단일 테스트 레코드 ID")
+    scope.add_argument(
+        "--id",
+        dest="record_id",
+        type=validate_record_id,
+        help="history 카드에 표시된 삭제 대상 숫자 ID",
+    )
     scope.add_argument(
         "--date",
         dest="target_date",

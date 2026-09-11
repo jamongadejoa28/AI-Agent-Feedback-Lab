@@ -578,10 +578,27 @@ textarea:disabled {
     display: flex;
     justify-content: space-between;
     align-items: center;
+    flex-wrap: wrap;
+    gap: 8px 16px;
     font-size: 0.85rem;
     color: var(--text-secondary);
     border-bottom: 1px solid #f1f3f4;
     padding-bottom: 8px;
+}
+
+.feedback-card-metadata {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 6px 16px;
+    min-width: 0;
+}
+
+.feedback-id {
+    overflow-wrap: anywhere;
+    color: var(--text-primary);
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+    font-size: 0.8rem;
 }
 
 .feedback-time {

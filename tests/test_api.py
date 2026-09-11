@@ -352,6 +352,7 @@ def test_feedback_stats_and_list_endpoints(
     assert list_res2.json()["total_count"] == 1
     items = list_res2.json()["items"]
     assert len(items) == 1
+    assert items[0]["feedback_id"] == 1
     assert items[0]["question"] == "구매문의 방법은?"
     assert items[0]["agent_response"] == "챗봇 답변"
     assert items[0]["expected_response"] == "마케팅부서(070-8666-4272) 안내 필요"

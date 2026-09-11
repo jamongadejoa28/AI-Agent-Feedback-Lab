@@ -100,8 +100,14 @@ class PolicyInfoResponse(BaseModel):
 
 
 class FeedbackItemResponse(BaseModel):
-    """피드백 열람용 개별 레코드 응답 모델."""
+    """피드백 열람용 개별 레코드 응답 모델.
 
+    ``feedback_id``는 현재 완료 피드백을 1부터 정렬한 관리 순번이며 삭제 시 남은
+    데이터에 맞춰 갱신됩니다. ``id``는 기존 테스트 상태 전이 API가 사용하는
+    변경되지 않는 내부 UUID입니다.
+    """
+
+    feedback_id: int = Field(..., ge=1, description="개발자 관리용 연속 피드백 ID")
     id: str = Field(..., description="테스트 레코드 ID")
     test_date: str = Field(..., description="테스트 실행 일자 (Asia/Seoul)")
     created_at: str = Field(..., description="테스트 생성 시각 (ISO 8601)")

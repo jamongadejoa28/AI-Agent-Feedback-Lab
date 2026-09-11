@@ -75,6 +75,7 @@ def test_export_completed_records_only(temp_db: Database) -> None:
 
             # 필수 필드 보존 검증
             for p in (parsed_1, parsed_2):
+                assert "feedback_id" in p
                 assert "id" in p
                 assert "tester_id" in p
                 assert "created_at" in p

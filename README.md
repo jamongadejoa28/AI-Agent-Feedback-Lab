@@ -213,13 +213,17 @@ AGENT_TIMEOUT_SECONDS=30.0
 
 ### 7.1 완료 피드백 삭제
 
-개발자는 터미널에서 완료된 피드백을 ID, 한국 날짜, 전체 범위로 삭제할 수 있습니다.
+완료된 피드백은 SQLite의 `tests.feedback_id`에 1부터 시작하는 연속 숫자 관리 ID로
+저장되며, `/history` 카드 헤더에는 `ID: 1` 형식으로 표시됩니다. 중간 피드백을
+삭제하면 뒤의 번호를 자동으로 당겨 현재 데이터가 항상 `1..N`을 유지합니다. 내부
+UUID인 `tests.id`는 테스트 상태 전이와 테스터 격리를 위해 변경 없이 유지됩니다.
+개발자는 카드의 숫자 ID, 한국 날짜, 전체 범위로 완료 피드백을 삭제할 수 있습니다.
 명령은 기본적으로 `삭제` 확인 문구를 요구하며, `--yes`는 자동화할 때만 사용합니다.
 `processing`, `awaiting_feedback`, `failed`, `cancelled` 레코드는 삭제 대상에서 제외됩니다.
 
 ```bash
 # 단일 피드백 삭제
-.venv/bin/python -m pipeline.delete_feedback --id TEST_ID
+.venv/bin/python -m pipeline.delete_feedback --id 1
 
 # 특정 날짜의 완료 피드백 삭제
 .venv/bin/python -m pipeline.delete_feedback --date 2026-09-08

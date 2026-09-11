@@ -7,6 +7,7 @@ R7, R10에 따라:
 """
 
 import tempfile
+import sqlite3
 import uuid
 from pathlib import Path
 from typing import Generator
@@ -54,6 +55,7 @@ def test_status_lifecycle_success(temp_db: Database) -> None:
     assert record.question == question
     assert record.agent_response is None
     assert record.latency_ms is None
+    assert record.feedback_id is None
 
     # 2. Agent 성공 응답 반영 -> awaiting_feedback
     updated = temp_db.update_test_success(
@@ -81,6 +83,7 @@ def test_status_lifecycle_success(temp_db: Database) -> None:
     assert completed_record is not None
     assert completed_record.status == "completed"
     assert completed_record.expected_response == "A/S 접수 경로도 같이 안내해야 함"
+    assert completed_record.feedback_id == 1
 
 
 def test_status_lifecycle_failure(temp_db: Database) -> None:
@@ -185,6 +188,9 @@ def test_delete_completed_feedbacks_preserves_other_states(temp_db: Database) ->
     first, _ = temp_db.reserve_test(tester_id, str(uuid.uuid4()), "삭제 대상 1")
     temp_db.update_test_success(first.id, "답변 1", 100)
     temp_db.save_feedback(first.id, tester_id, "피드백 1")
+    first_completed = temp_db.get_test_by_id_and_tester(first.id, tester_id)
+    assert first_completed is not None
+    assert first_completed.feedback_id is not None
 
     second, _ = temp_db.reserve_test(tester_id, str(uuid.uuid4()), "삭제 대상 2")
     temp_db.update_test_success(second.id, "답변 2", 100)
@@ -193,7 +199,7 @@ def test_delete_completed_feedbacks_preserves_other_states(temp_db: Database) ->
     awaiting, _ = temp_db.reserve_test(tester_id, str(uuid.uuid4()), "보존할 대기 레코드")
     temp_db.update_test_success(awaiting.id, "대기 답변", 100)
 
-    assert temp_db.delete_completed_feedbacks(test_id=first.id) == 1
+    assert temp_db.delete_completed_feedbacks(feedback_id=first_completed.feedback_id) == 1
     assert temp_db.get_completed_count() == 1
     assert temp_db.delete_completed_feedbacks(delete_all=True) == 1
     assert temp_db.get_completed_count() == 0
@@ -201,3 +207,97 @@ def test_delete_completed_feedbacks_preserves_other_states(temp_db: Database) ->
 
     with pytest.raises(ValueError, match="정확히 하나"):
         temp_db.delete_completed_feedbacks()
+
+
+def test_feedback_id_is_compacted_after_delete_and_restarts_at_one(temp_db: Database) -> None:
+    """중간 삭제 시 뒤 번호를 당기고 데이터가 비면 다음 피드백이 다시 1인지 검증합니다."""
+    tester_id = str(uuid.uuid4())
+    records = []
+    for number in range(1, 7):
+        record, _ = temp_db.reserve_test(
+            tester_id,
+            str(uuid.uuid4()),
+            f"관리 번호 {number}",
+        )
+        temp_db.update_test_success(record.id, f"답변 {number}", 100)
+        temp_db.save_feedback(record.id, tester_id, f"피드백 {number}")
+        completed = temp_db.get_test_by_id_and_tester(record.id, tester_id)
+        assert completed is not None
+        assert completed.feedback_id == number
+        records.append(completed)
+
+    assert temp_db.delete_completed_feedbacks(feedback_id=4) == 1
+    remaining = temp_db.get_completed_tests()
+    assert [record.feedback_id for record in remaining] == [1, 2, 3, 4, 5]
+    assert remaining[3].id == records[4].id
+    assert remaining[4].id == records[5].id
+
+    assert temp_db.delete_completed_feedbacks(delete_all=True) == 5
+    new_record, _ = temp_db.reserve_test(tester_id, str(uuid.uuid4()), "비운 뒤 새 피드백")
+    assert new_record.feedback_id is None
+    temp_db.update_test_success(new_record.id, "새 답변", 100)
+    temp_db.save_feedback(new_record.id, tester_id, "새 피드백")
+    completed_new = temp_db.get_test_by_id_and_tester(new_record.id, tester_id)
+    assert completed_new is not None
+    assert completed_new.feedback_id == 1
+
+
+def test_init_db_migrates_legacy_uuid_only_schema() -> None:
+    """기존 UUID 전용 DB에서 완료 피드백만 1부터 숫자 순번을 받는지 검증합니다."""
+    with tempfile.TemporaryDirectory() as tmpdir:
+        db_path = Path(tmpdir) / "legacy_feedback.db"
+        with sqlite3.connect(db_path) as conn:
+            conn.execute("""
+                CREATE TABLE tests (
+                    id TEXT PRIMARY KEY,
+                    tester_id TEXT NOT NULL,
+                    client_request_id TEXT NOT NULL,
+                    created_at TEXT NOT NULL,
+                    test_date TEXT NOT NULL,
+                    question TEXT NOT NULL,
+                    agent_response TEXT,
+                    expected_response TEXT,
+                    status TEXT NOT NULL,
+                    latency_ms INTEGER,
+                    metadata_json TEXT,
+                    UNIQUE(tester_id, client_request_id)
+                );
+            """)
+            for index in range(3):
+                legacy_id = str(uuid.uuid4())
+                status = "completed" if index < 2 else "processing"
+                conn.execute(
+                    """
+                    INSERT INTO tests (
+                        id, tester_id, client_request_id, created_at, test_date,
+                        question, agent_response, expected_response, status
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?);
+                    """,
+                    (
+                        legacy_id,
+                        f"legacy-tester-{index}",
+                        f"legacy-request-{index}",
+                        f"2026-09-11T00:00:0{index}+00:00",
+                        "2026-09-11",
+                        f"기존 질문 {index}",
+                        "기존 답변" if status == "completed" else None,
+                        "기존 피드백" if status == "completed" else None,
+                        status,
+                    ),
+                )
+
+        migrated = Database(db_path=str(db_path))
+        with migrated.get_connection() as conn:
+            ids = [
+                row[0]
+                for row in conn.execute("SELECT feedback_id FROM tests ORDER BY rowid;")
+            ]
+        assert ids == [1, 2, None]
+
+        created, _ = migrated.reserve_test("new-tester", "new-request", "마이그레이션 후 질문")
+        assert created.feedback_id is None
+        migrated.update_test_success(created.id, "새 답변", 100)
+        migrated.save_feedback(created.id, "new-tester", "새 피드백")
+        completed = migrated.get_test_by_id_and_tester(created.id, "new-tester")
+        assert completed is not None
+        assert completed.feedback_id == 3

@@ -9,7 +9,7 @@ from typing import Generator
 import pytest
 
 from app.database import Database
-from pipeline.delete_feedback import run_delete, validate_date
+from pipeline.delete_feedback import run_delete, validate_date, validate_record_id
 
 
 @pytest.fixture
@@ -19,13 +19,16 @@ def temp_db() -> Generator[Database, None, None]:
         yield Database(db_path=str(Path(tmpdir) / "delete_test.db"))
 
 
-def create_completed_feedback(database: Database, question: str) -> str:
-    """삭제 테스트에 사용할 completed 레코드를 만들고 ID를 반환합니다."""
+def create_completed_feedback(database: Database, question: str) -> int:
+    """삭제 테스트용 completed 레코드를 만들고 화면과 CLI가 쓰는 숫자 ID를 반환합니다."""
     tester_id = str(uuid.uuid4())
     record, _ = database.reserve_test(tester_id, str(uuid.uuid4()), question)
     database.update_test_success(record.id, f"{question} 답변", 100)
     database.save_feedback(record.id, tester_id, f"{question} 피드백")
-    return record.id
+    completed = database.get_test_by_id_and_tester(record.id, tester_id)
+    assert completed is not None
+    assert completed.feedback_id is not None
+    return completed.feedback_id
 
 
 def test_run_delete_requires_confirmation(temp_db: Database) -> None:
@@ -66,11 +69,11 @@ def test_run_delete_by_korean_test_date(temp_db: Database) -> None:
     with temp_db.get_connection() as conn:
         conn.execute("BEGIN IMMEDIATE;")
         conn.execute(
-            "UPDATE tests SET test_date = ? WHERE id = ?;",
+            "UPDATE tests SET test_date = ? WHERE feedback_id = ?;",
             ("2026-09-08", target_id),
         )
         conn.execute(
-            "UPDATE tests SET test_date = ? WHERE id = ?;",
+            "UPDATE tests SET test_date = ? WHERE feedback_id = ?;",
             ("2026-09-09", preserved_id),
         )
         conn.execute("COMMIT;")
@@ -81,7 +84,8 @@ def test_run_delete_by_korean_test_date(temp_db: Database) -> None:
         database=temp_db,
     ) == 1
     assert temp_db.get_completed_count() == 1
-    assert temp_db.count_completed_feedbacks_for_deletion(test_id=preserved_id) == 1
+    assert temp_db.count_completed_feedbacks_for_deletion(feedback_id=preserved_id) == 0
+    assert temp_db.count_completed_feedbacks_for_deletion(feedback_id=1) == 1
 
 
 def test_validate_date_rejects_invalid_calendar_date() -> None:
@@ -89,3 +93,11 @@ def test_validate_date_rejects_invalid_calendar_date() -> None:
     assert validate_date("2026-09-08") == "2026-09-08"
     with pytest.raises(argparse.ArgumentTypeError):
         validate_date("2026-02-30")
+
+
+def test_validate_record_id_accepts_only_positive_integer() -> None:
+    """삭제 CLI가 카드의 양의 숫자 ID만 받고 UUID나 0 이하 값은 거부하는지 검증합니다."""
+    assert validate_record_id("12") == 12
+    for invalid in ("0", "-1", "550e8400-e29b-41d4-a716-446655440000"):
+        with pytest.raises(argparse.ArgumentTypeError):
+            validate_record_id(invalid)

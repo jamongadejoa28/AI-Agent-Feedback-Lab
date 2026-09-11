@@ -26,6 +26,21 @@ from app.database import TestRecord, db
 KST = ZoneInfo("Asia/Seoul")
 
 
+def require_feedback_id(record: TestRecord) -> int:
+    """익스포트 대상 완료 레코드의 숫자 관리 ID를 반환합니다.
+
+    완료 레코드에 순번이 없는 비정상 DB 상태를 0 같은 임의 값으로 출력하지 않고
+    즉시 실패시켜, JSONL과 history 화면이 서로 다른 식별자를 보여주는 상황을
+    방지합니다.
+
+    예외:
+        ``feedback_id``가 없으면 ValueError를 발생시킵니다.
+    """
+    if record.feedback_id is None:
+        raise ValueError("완료 피드백의 숫자 관리 ID가 누락되었습니다.")
+    return record.feedback_id
+
+
 def export_records_to_jsonl(
     records: list[TestRecord],
     exports_dir: Path,
@@ -41,7 +56,7 @@ def export_records_to_jsonl(
     """
     exports_dir.mkdir(parents=True, exist_ok=True)
 
-    # 일자별 그룹화 (안정 정렬 보장: created_at, id 순)
+    # 일자별 그룹화 (안정 정렬 보장: created_at, 숫자 관리 ID 순)
     grouped: dict[str, list[TestRecord]] = defaultdict(list)
     for r in records:
         grouped[r.test_date].append(r)
@@ -49,8 +64,8 @@ def export_records_to_jsonl(
     results: dict[str, int] = {}
 
     for date_str, items in grouped.items():
-        # 안정 정렬: 생성 시각 및 레코드 ID 기준
-        items.sort(key=lambda x: (x.created_at, x.id))
+        # 안정 정렬: 생성 시각 및 숫자 관리 ID 기준
+        items.sort(key=lambda x: (x.created_at, require_feedback_id(x)))
 
         target_file = exports_dir / f"{date_str}.jsonl"
         tmp_file = exports_dir / f".{date_str}.jsonl.tmp"
@@ -58,7 +73,9 @@ def export_records_to_jsonl(
         # 임시 파일에 정렬된 JSONL 라인 기록
         with open(tmp_file, "w", encoding="utf-8") as f:
             for item in items:
+                feedback_id = require_feedback_id(item)
                 record_dict = {
+                    "feedback_id": feedback_id,
                     "id": item.id,
                     "tester_id": item.tester_id,
                     "client_request_id": item.client_request_id,

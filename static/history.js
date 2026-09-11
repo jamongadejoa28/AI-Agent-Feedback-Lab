@@ -85,14 +85,28 @@
         const card = document.createElement("article");
         card.className = "card feedback-card";
 
-        // 카드 상단 헤더 (일시, 소요시간)
+        // 삭제 CLI의 --id에 그대로 입력할 숫자 관리 ID와 생성 시각을 함께 노출합니다.
         const header = document.createElement("div");
         header.className = "feedback-card-header";
+
+        const metadata = document.createElement("div");
+        metadata.className = "feedback-card-metadata";
+
+        const idSpan = document.createElement("span");
+        idSpan.className = "feedback-id";
+        const feedbackId = Number(item.feedback_id);
+        const hasValidFeedbackId = Number.isInteger(feedbackId) && feedbackId >= 1;
+        idSpan.textContent = hasValidFeedbackId ? `ID: ${feedbackId}` : "ID: 확인 불가";
+        idSpan.title = hasValidFeedbackId
+            ? "피드백 관리 ID"
+            : "서버 응답에 피드백 관리 ID가 없습니다. 서버를 새 코드로 재시작해 주세요.";
+        metadata.appendChild(idSpan);
 
         const timeSpan = document.createElement("span");
         timeSpan.className = "feedback-time";
         timeSpan.textContent = `📅 ${formatDateTime(item.created_at)}`;
-        header.appendChild(timeSpan);
+        metadata.appendChild(timeSpan);
+        header.appendChild(metadata);
 
         if (item.latency_ms !== null && item.latency_ms !== undefined) {
             const latencyBadge = document.createElement("span");

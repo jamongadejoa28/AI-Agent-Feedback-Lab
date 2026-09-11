@@ -168,18 +168,23 @@ async def get_feedbacks(
     total_pages = (total + page_size - 1) // page_size
     offset = (page - 1) * page_size
     records = db.get_feedbacks_list(limit=page_size, offset=offset, search=search)
-    items = [
-        FeedbackItemResponse(
-            id=r.id,
-            test_date=r.test_date,
-            created_at=r.created_at,
-            question=r.question,
-            agent_response=r.agent_response,
-            expected_response=r.expected_response,
-            latency_ms=r.latency_ms,
+    items: list[FeedbackItemResponse] = []
+    for record in records:
+        # completed 행의 관리 순번이 없으면 카드와 삭제 CLI가 다른 대상을 가리킬 수 있으므로 숨기지 않습니다.
+        if record.feedback_id is None:
+            raise DatabaseError("완료 피드백의 숫자 관리 ID가 누락되었습니다.")
+        items.append(
+            FeedbackItemResponse(
+                feedback_id=record.feedback_id,
+                id=record.id,
+                test_date=record.test_date,
+                created_at=record.created_at,
+                question=record.question,
+                agent_response=record.agent_response,
+                expected_response=record.expected_response,
+                latency_ms=record.latency_ms,
+            )
         )
-        for r in records
-    ]
     return FeedbackListResponse(
         total_count=total,
         page=page,

@@ -27,14 +27,18 @@ def test_concurrent_multi_tester_reservations(temp_db: Database) -> None:
     """수십 명의 서로 다른 테스터가 동시에 요청할 때 SQLite WAL 모드에서 락 에러 없이 정상 처리되는지 검증합니다."""
     num_requests = 30
 
-    def task(i: int) -> tuple[str, bool]:
+    def task(i: int) -> tuple[int, bool]:
         t_id = f"tester_{i}"
         req_id = str(uuid.uuid4())
         q = f"동시 요청 질문 {i}"
         record, is_new = temp_db.reserve_test(t_id, req_id, q)
-        # 성공 시뮬레이션
+        # 성공과 피드백 제출까지 동시에 수행해 숫자 순번 발급의 쓰기 직렬화를 함께 검증합니다.
         temp_db.update_test_success(record.id, f"답변 {i}", 100)
-        return record.id, is_new
+        temp_db.save_feedback(record.id, t_id, f"피드백 {i}")
+        completed = temp_db.get_test_by_id_and_tester(record.id, t_id)
+        assert completed is not None
+        assert completed.feedback_id is not None
+        return completed.feedback_id, is_new
 
     with concurrent.futures.ThreadPoolExecutor(max_workers=10) as executor:
         futures = [executor.submit(task, i) for i in range(num_requests)]
@@ -42,10 +46,14 @@ def test_concurrent_multi_tester_reservations(temp_db: Database) -> None:
 
     assert len(results) == num_requests
     assert all(is_new for _, is_new in results)
+    assert len({feedback_id for feedback_id, _ in results}) == num_requests
 
-    # update_test_success는 awaiting_feedback 상태이므로 완료 목록에는 포함되지 않아야 함
+    # 동시에 완료된 피드백도 관리 번호 1..N을 중복 없이 가져야 합니다.
     completed = temp_db.get_completed_tests()
-    assert completed == []
+    assert len(completed) == num_requests
+    assert sorted(record.feedback_id for record in completed if record.feedback_id) == list(
+        range(1, num_requests + 1)
+    )
 
     # 동시에 생성한 테스트 레코드는 상태와 관계없이 모두 저장되어야 함
     with temp_db.get_connection() as conn:
